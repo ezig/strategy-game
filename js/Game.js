@@ -1,5 +1,4 @@
 var grid = [];
-var frontier = [];
 
 var map = [[1,1,1,1,1,1,1,1,1,2,1,1,1,1,1,1,1,1,1,1],
            [1,1,1,1,1,1,1,1,1,2,1,1,1,1,1,1,1,1,1,1],
@@ -40,9 +39,7 @@ Strategy.Game.prototype = {
             }
         }
 
-        frontier.push(grid[1][10]);
-
-        grid[1][10].tint = 0xFF0000;
+        grid[1][10].tint = 0x00FF00;
         this.drawMoveRange(4,grid[1][10]);
 
     },
@@ -57,7 +54,10 @@ Strategy.Game.prototype = {
             var row = tile.row + dirs[i][0];
             var col = tile.col + dirs[i][1];
             if (row >= 0 && row <= grid.length - 1 && col >= 0 && col <= grid[0].length) {
-                neighbors.push(grid[row][col]);
+                if (!grid[row][col].isObstacle)
+                {
+                    neighbors.push(grid[row][col]);
+                }
             }
         }
 
@@ -65,38 +65,35 @@ Strategy.Game.prototype = {
     },
 
     drawMoveRange: function (moves, tile) {
-        if (tile.row < 0 || tile.row > grid.length - 1 || tile.col < 0 || tile.col > grid[0].length) {
-            return;
-        }
-        if (tile.isObstacle) {
-            return;
-        }
+        var frontier = [];
+        frontier.push(tile);
+        tile.visited = true;
+        tile.depth = 0;
 
-        if (tile.tint != 0xFF0000) {
-            tile.tint = 0x0000FF;
+        while (frontier.length != 0) {
+            var current = frontier.shift();
+            
+            if (current.depth > moves) {
+                current.tint = 0xFF0000;
+                continue;
+            }
+
+            if (current.depth != 0) {
+                current.tint = 0x0000FF;
+            }
+
+            var neighbors = this.neighbors(current);
+            var len = neighbors.length;
+
+            for (var i = 0; i < len; i++) {
+                if (!neighbors[i].visited) {
+                    frontier.push(neighbors[i]);
+                    neighbors[i].depth = current.depth + current.cost;
+                    neighbors[i].visited = true;
+                }
+            }
+
         }
-
-        moves -= tile.cost;
-
-        if (moves < 0) {
-            return;
-        }
-
-        console.log(this.neighbors(tile));
-        var neighbors = this.neighbors(tile);
-        var len = neighbors.length;
-        for (var i = 0; i < len; i++) {
-            this.game.time.events.add(Phaser.Timer.SECOND, this.drawMoveRange, this, moves, neighbors[i]);  
-        }
-        
-        // this.game.time.events.add(Phaser.Timer.SECOND, this.drawMoveRange, this, moves, row + 1, col);
-        // this.game.time.events.add(Phaser.Timer.SECOND, this.drawMoveRange, this, moves, row, col - 1);
-        // this.game.time.events.add(Phaser.Timer.SECOND, this.drawMoveRange, this, moves, row, col + 1);
-
-        // this.drawMoveRange(moves, row - 1, col);
-        // this.drawMoveRange(moves, row + 1, col);
-        // this.drawMoveRange(moves, row, col - 1);
-        // this.drawMoveRange(moves, row, col + 1);
     },
 
     update: function () {
