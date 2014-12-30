@@ -1,4 +1,6 @@
 var grid = [];
+var frontier = [];
+
 var map = [[1,1,1,1,1,1,1,1,1,2,1,1,1,1,1,1,1,1,1,1],
            [1,1,1,1,1,1,1,1,1,2,1,1,1,1,1,1,1,1,1,1],
            [1,1,1,1,1,1,1,1,0,0,0,1,1,1,1,1,1,1,1,1],
@@ -31,42 +33,65 @@ Strategy.Game.prototype = {
                 tile.frame = map[i][j];
                 tile.isObstacle = !map[i][j];
                 tile.cost = map[i][j];
+                tile.row = i;
+                tile.col = j;
 
                 grid[i][j] = tile;
             }
         }
 
+        frontier.push(grid[1][10]);
+
         grid[1][10].tint = 0xFF0000;
-        this.drawMoveRange(4,1,10);
+        this.drawMoveRange(4,grid[1][10]);
 
     },
 
-    drawMoveRange: function (moves, row, col) {
-        if (row < 0 || row > grid.length - 1 || col < 0 || col > grid[0].length)
+    neighbors: function (tile) {
+        var dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+        var neighbors = [];
+
+        var len = dirs.length
+        for (var i = 0; i < dirs.length; i++)
         {
+            var row = tile.row + dirs[i][0];
+            var col = tile.col + dirs[i][1];
+            if (row >= 0 && row <= grid.length - 1 && col >= 0 && col <= grid[0].length) {
+                neighbors.push(grid[row][col]);
+            }
+        }
+
+        return neighbors;
+    },
+
+    drawMoveRange: function (moves, tile) {
+        if (tile.row < 0 || tile.row > grid.length - 1 || tile.col < 0 || tile.col > grid[0].length) {
             return;
         }
-        if (grid[row][col].isObstacle)
-        {
+        if (tile.isObstacle) {
             return;
         }
 
-        if (grid[row][col].tint != 0xFF0000)
-        {
-            grid[row][col].tint = 0x0000FF;
+        if (tile.tint != 0xFF0000) {
+            tile.tint = 0x0000FF;
         }
 
-        moves -= grid[row][col].cost;
+        moves -= tile.cost;
 
-        if (moves < 0)
-        {
+        if (moves < 0) {
             return;
         }
 
-        this.game.time.events.add(Phaser.Timer.SECOND, this.drawMoveRange, this, moves, row - 1, col);
-        this.game.time.events.add(Phaser.Timer.SECOND, this.drawMoveRange, this, moves, row + 1, col);
-        this.game.time.events.add(Phaser.Timer.SECOND, this.drawMoveRange, this, moves, row, col - 1);
-        this.game.time.events.add(Phaser.Timer.SECOND, this.drawMoveRange, this, moves, row, col + 1);
+        console.log(this.neighbors(tile));
+        var neighbors = this.neighbors(tile);
+        var len = neighbors.length;
+        for (var i = 0; i < len; i++) {
+            this.game.time.events.add(Phaser.Timer.SECOND, this.drawMoveRange, this, moves, neighbors[i]);  
+        }
+        
+        // this.game.time.events.add(Phaser.Timer.SECOND, this.drawMoveRange, this, moves, row + 1, col);
+        // this.game.time.events.add(Phaser.Timer.SECOND, this.drawMoveRange, this, moves, row, col - 1);
+        // this.game.time.events.add(Phaser.Timer.SECOND, this.drawMoveRange, this, moves, row, col + 1);
 
         // this.drawMoveRange(moves, row - 1, col);
         // this.drawMoveRange(moves, row + 1, col);
