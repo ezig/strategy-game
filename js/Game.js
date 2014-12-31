@@ -1,5 +1,6 @@
 var grid = [];
-
+var ranges = [];
+var path = [];
 var map = [[1,1,1,1,1,1,1,1,1,2,1,1,1,1,1,1,1,1,1,1],
            [1,1,1,1,1,1,1,1,1,2,1,1,1,1,1,1,1,1,1,1],
            [1,1,1,1,1,1,1,1,0,0,0,1,1,1,1,1,1,1,1,1],
@@ -47,11 +48,11 @@ Strategy.Game.prototype = {
         player.tint = 0x00FF00;
         player.row = 1;
         player.col = 12;
-        player.moves = 4;
+        player.moves = 10;
         player.range = 1;
 
         player.inputEnabled = true;
-        player.events.onInputDown.add(this.drawMoveRange, this, player);
+        player.events.onInputDown.add(this.drawRange, this, player);
 
         var player2 = this.game.add.sprite(144, 96, 'tiles');
         player2.frame = 1;
@@ -64,7 +65,7 @@ Strategy.Game.prototype = {
         player2.range = 4;
 
         player2.inputEnabled = true;
-        player2.events.onInputDown.add(this.drawMoveRange, this, player2);
+        player2.events.onInputDown.add(this.drawRange, this, player2);
     },
 
     neighbors: function (tile) {
@@ -83,7 +84,47 @@ Strategy.Game.prototype = {
         return neighbors;
     },
 
-    drawMoveRange: function (player) {
+    drawRange: function (player) {
+        this.findRange(player);
+        var playerTile = grid[player.row][player.col];
+
+        var len = ranges["move"].length;
+        for (var i = 0; i < len; i++) {
+            ranges["move"][i].tint = 0x0000FF;
+            ranges["move"][i].inputEnabled = true;
+            ranges["move"][i].events.onInputOver.add(function(tile, pointer) {
+                this.drawPath(tile, playerTile);
+            }, this);
+        };
+
+        var len = ranges["attack"].length;
+        for (var i = 0; i < len; i++) {
+            ranges["attack"][i].tint = 0xFF0000;
+        };
+    },
+
+    drawPath: function (to, from) {
+        this.clearPath();
+        path = [];
+
+        while(to != from) {
+            path.push(to);
+            to.tint = 0x00FF00;
+            to = to.cameFrom;
+        }
+
+        from.tint = 0x00FF00;
+    },
+
+    clearPath: function () {
+        var len = path.length;
+
+        for (var i = 0; i < len; i++) {
+            path[i].tint = 0x0000FF;
+        }
+    },
+
+    findRange: function (player) {
         this.clearDraw();
 
         var visited = [];
@@ -99,18 +140,21 @@ Strategy.Game.prototype = {
         var moves = player.moves;
         var range = player.range;
 
+        ranges["move"] = [];
+        ranges["attack"] = [];
+
         while (frontier.length != 0) {
             // get the first tile in the queue
             var current = frontier.shift();
 
             // if we're with the movement range, show a blue tile
             if (current.depth <= moves) {
-                current.tint = 0x0000FF;
+                ranges["move"].push(current);
             }
             // if we're outside of the movement range but within the attack range tile,
             // show a red tile
             else if (current.depth <= moves + range) {
-                current.tint = 0xFF0000;
+                ranges["attack"].push(current);
             }
 
             // get all of the neighbors of the current tile
@@ -140,6 +184,7 @@ Strategy.Game.prototype = {
                         // (the max attack range after maximum movement)
                         if (neighbors[i].depth <= moves + range)
                         {
+                            neighbors[i].cameFrom = current;
                             frontier.push(neighbors[i]);
                             visited.push(neighbors[i]);
                         }
@@ -209,7 +254,7 @@ Strategy.Game.prototype = {
         }
 
         if (this.visited.indexOf(tile) == -1 && !tile.isObstacle) {
-            tile.tint = 0xFF0000;
+            ranges["attack"].push(tile);
             this.visited.push(tile);
         }
 
@@ -227,7 +272,10 @@ Strategy.Game.prototype = {
 
         for (var i = 0; i < len; i++) {
             this.visited[i].tint = 0xFFFFFF;
+            this.visited[i].events.onInputOver.removeAll();
         }
+
+        path = [];
     },
 
 };
