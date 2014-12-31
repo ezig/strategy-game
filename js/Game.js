@@ -11,7 +11,7 @@ var map = [[1,1,1,1,1,1,1,1,1,2,1,1,1,1,1,1,1,1,1,1],
            [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
            [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
            [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
-           [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+           [1,1,1,1,1,1,1,1,0,0,0,1,1,1,1,1,1,1,1,1],
            [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
            [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
            [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],];
@@ -61,7 +61,7 @@ Strategy.Game.prototype = {
         player2.row = 6;
         player2.col = 9;
         player2.moves = 3;
-        player2.range = 5;
+        player2.range = 4;
 
         player2.inputEnabled = true;
         player2.events.onInputDown.add(this.drawMoveRange, this, player2);
@@ -86,58 +86,70 @@ Strategy.Game.prototype = {
     drawMoveRange: function (player) {
         this.clearDraw();
 
-        var tile = grid[player.row][player.col];
-        tile.visited = true;
-        tile.depth = 0;
-
         var visited = [];
         var frontier = [];
         var attack = [];
 
+        var tile = grid[player.row][player.col];
+        tile.depth = 0;
+
         frontier.push(tile);
+        visited.push(tile);
 
         var moves = player.moves;
         var range = player.range;
 
         while (frontier.length != 0) {
+            // get the first tile in the queue
             var current = frontier.shift();
 
-            // if we
+            // if we're with the movement range, show a blue tile
             if (current.depth <= moves) {
                 current.tint = 0x0000FF;
             }
-            // if we're outside of the movement range, 
+            // if we're outside of the movement range but within the attack range tile,
+            // show a red tile
             else if (current.depth <= moves + range) {
                 current.tint = 0xFF0000;
             }
-            // we went too far, so we didn't really mean to visit this
-            // this is important later for checking if you can shoot through a wall
-            // because we may need to recheck this tile
-            // else {
-            //     visited.splice(visited.indexOf(current), 1);
-            //     continue;
-            // }
 
+            // get all of the neighbors of the current tile
             var neighbors = this.neighbors(current);
             var len = neighbors.length;
 
             for (var i = 0; i < len; i++) {
+                // if we've already been to this tile, ignore it
                 if (visited.indexOf(neighbors[i]) == -1) {
+
                     if (!neighbors[i].isObstacle) {
+                        // within the movement range, we take
+                        // the cost (terrain type) of moving INTO a
+                        // tile when we consider the "depth" of that
+                        // tile from the starting point
                         if (current.depth < moves) {
                             neighbors[i].depth = current.depth + neighbors[i].cost;
-                        } else {
+                        } 
+                        // outside of the movement range but within the attack range,
+                        // all terrain costs the same
+                        else {
                             neighbors[i].depth = current.depth + 1;
                         }
 
+                        // add the neighbor to the queue and to the array of visited tiles
+                        // as long as it is within the depth-limit of moves + range 
+                        // (the max attack range after maximum movement)
                         if (neighbors[i].depth <= moves + range)
                         {
                             frontier.push(neighbors[i]);
                             visited.push(neighbors[i]);
                         }
                     } 
-                    else if (current.depth <= moves && range > 1) {
-                        neighbors[i].depth = moves + 1;
+                    // if we encounter an obstacle in the movement range and our
+                    // character has a ranged attack, keep track of the obstacle
+                    // so that later we can see if there are any oppurtunities
+                    // to attack over the wall
+                    else if (range > 1) {
+                        neighbors[i].depth = current.depth + 1;
                         attack.push(neighbors[i]);
                         visited.push(neighbors[i]);
                     }
@@ -145,37 +157,69 @@ Strategy.Game.prototype = {
             }
         }
 
-        if (attack.length > 0) {
-            while (attack.length != 0) {
-                var current = attack.shift();
+        this.visited = visited;
 
-                if (current.depth <= moves + range) {
-                    if (!current.isObstacle) {
-                        current.tint = 0xFF0000;
-                    }
-                } 
-                else {
-                    continue;
-                }
-
-                var neighbors = this.neighbors(current);
-                var len = neighbors.length;
-
-                for (var i = 0; i < len; i++) {
-                    if (visited.indexOf(neighbors[i]) == -1) {
-                        neighbors[i].depth = current.depth + 1;
-                        console.log(neighbors[i].row, neighbors[i].col);
-                        if (neighbors[i].depth <= moves + range)
-                        {
-                            attack.push(neighbors[i]);
-                            visited.push(neighbors[i]);
-                        }
-                    }
-                }
-            }
+        // if we encountered obstacles as a ranged character in the movement range,
+        // we need to check if there are any squares in the attack range
+        // that are reachable by attacking over an obstacle
+        // we will attempt to flood fill any non-obstacle spaces within the attack
+        // range - 1 from the encountered obstacle (minus 1 because the obstacle itself
+        // already represents 1 range away from where the character can stand)
+        var len = attack.length;
+        for (var i = 0; i < len; i++) {
+            this.attackFill(attack[i], (moves + range) - attack[i].depth)
         }
+           // this.attackFill(tile, range);
+        // if (attack.length > 0) {
+        //     while (attack.length != 0) {
+        //         var current = attack.shift();
+
+        //         if (current.depth <= moves + range) {
+        //             if (!current.isObstacle) {
+        //                 current.tint = 0xFF0000;
+        //             }
+        //         } 
+        //         else {
+        //             continue;
+        //         }
+
+        //         var neighbors = this.neighbors(current);
+        //         var len = neighbors.length;
+
+        //         for (var i = 0; i < len; i++) {
+        //             if (visited.indexOf(neighbors[i]) == -1) {
+        //                 neighbors[i].depth = current.depth + 1;
+        //                 console.log(neighbors[i].row, neighbors[i].col);
+        //                 if (neighbors[i].depth <= moves + range)
+        //                 {
+        //                     attack.push(neighbors[i]);
+        //                     visited.push(neighbors[i]);
+        //                 }
+        //             }
+        //         }
+        //     }
+        // }
 
         this.visited = visited;
+    },
+
+    attackFill: function (tile, range) {
+        if (range < 0) {
+            return;
+        }
+
+        if (this.visited.indexOf(tile) == -1 && !tile.isObstacle) {
+            tile.tint = 0xFF0000;
+            this.visited.push(tile);
+        }
+
+        var neighbors = this.neighbors(tile);
+        var len = neighbors.length;
+
+        for (var i = 0; i < len; i++) {
+            this.attackFill(neighbors[i], range - 1);
+        }
+
     },
 
     clearDraw: function () {
@@ -185,21 +229,5 @@ Strategy.Game.prototype = {
             this.visited[i].tint = 0xFFFFFF;
         }
     },
-
-    update: function () {
-
-        //  Honestly, just about anything could go here. It's YOUR game after all. Eat your heart out!
-
-    },
-
-    quitGame: function (pointer) {
-
-        //  Here you should destroy anything you no longer need.
-        //  Stop music, delete sprites, purge caches, free resources, all that good stuff.
-
-        //  Then let's go back to the main menu.
-        this.state.start('MainMenu');
-
-    }
 
 };
