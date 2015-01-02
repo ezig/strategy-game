@@ -61,11 +61,13 @@ Strategy.Game.prototype = {
         player2.tint = 0xFF00FF;
         player2.row = 6;
         player2.col = 9;
-        player2.moves = 3;
-        player2.range = 4;
+        player2.moves = 1;
+        player2.range = 1;
 
         player2.inputEnabled = true;
         player2.events.onInputDown.add(this.drawRange, this, player2);
+
+        this.test();
     },
 
     neighbors: function (tile) {
@@ -85,7 +87,9 @@ Strategy.Game.prototype = {
     },
 
     drawRange: function (player) {
+        this.clearDraw();
         this.findRange(player);
+
         var playerTile = grid[player.row][player.col];
 
         var len = ranges["move"].length;
@@ -94,6 +98,9 @@ Strategy.Game.prototype = {
             ranges["move"][i].inputEnabled = true;
             ranges["move"][i].events.onInputOver.add(function(tile, pointer) {
                 this.drawPath(tile, playerTile);
+            }, this);
+            ranges["move"][i].events.onInputDown.add(function(tile, pointer) {
+                this.followPath(player);
             }, this);
         };
 
@@ -124,9 +131,32 @@ Strategy.Game.prototype = {
         }
     },
 
-    findRange: function (player) {
+    // problem with clicking on player space
+    followPath: function (player) {
+        var next;
+        var currentCost = 0;
+        var playerTween = this.game.add.tween(player);
+
+        this.clearPath();
         this.clearDraw();
 
+        while (path.length > 0) {
+            next = path.pop();
+
+            playerTween.to({
+            x: next.col * 16, y: next.row * 16
+            }, 300 * Math.max(next.cost, currentCost), Phaser.Easing.Linear.None);
+
+            currentCost = next.cost;
+        }
+        player.row = next.row;
+        player.col = next.col;
+
+        playerTween.start();
+    },
+
+    findRange: function (player) {
+        path = [];
         var visited = [];
         var frontier = [];
         var attack = [];
@@ -171,7 +201,7 @@ Strategy.Game.prototype = {
                         // tile when we consider the "depth" of that
                         // tile from the starting point
                         if (current.depth < moves) {
-                            neighbors[i].depth = current.depth + neighbors[i].cost;
+                            neighbors[i].depth = current.depth + Math.max(neighbors[i].cost, current.cost);
                         } 
                         // outside of the movement range but within the attack range,
                         // all terrain costs the same
@@ -214,36 +244,6 @@ Strategy.Game.prototype = {
         for (var i = 0; i < len; i++) {
             this.attackFill(attack[i], (moves + range) - attack[i].depth)
         }
-           // this.attackFill(tile, range);
-        // if (attack.length > 0) {
-        //     while (attack.length != 0) {
-        //         var current = attack.shift();
-
-        //         if (current.depth <= moves + range) {
-        //             if (!current.isObstacle) {
-        //                 current.tint = 0xFF0000;
-        //             }
-        //         } 
-        //         else {
-        //             continue;
-        //         }
-
-        //         var neighbors = this.neighbors(current);
-        //         var len = neighbors.length;
-
-        //         for (var i = 0; i < len; i++) {
-        //             if (visited.indexOf(neighbors[i]) == -1) {
-        //                 neighbors[i].depth = current.depth + 1;
-        //                 console.log(neighbors[i].row, neighbors[i].col);
-        //                 if (neighbors[i].depth <= moves + range)
-        //                 {
-        //                     attack.push(neighbors[i]);
-        //                     visited.push(neighbors[i]);
-        //                 }
-        //             }
-        //         }
-        //     }
-        // }
 
         this.visited = visited;
     },
@@ -273,9 +273,28 @@ Strategy.Game.prototype = {
         for (var i = 0; i < len; i++) {
             this.visited[i].tint = 0xFFFFFF;
             this.visited[i].events.onInputOver.removeAll();
+            this.visited[i].events.onInputDown.removeAll();
         }
+    },
 
-        path = [];
+    test: function () {
+        var player = {};
+        player.row = 6;
+        player.col = 9;
+        player.range = 1;
+        player.moves = 1;
+        this.findRange(player);
+        assert(ranges["move"].sort == [grid[6][9],grid[7][9],grid[5][9],grid[6][8],grid[6][10]].sort);
+        assert(ranges["attack"].sort ==
+         [grid[8][9],grid[7][10],grid[7][8],grid[6][7],grid[6][11],grid[5][8],grid[5][10]].sort);
     },
 
 };
+
+function assert(condition, message) {
+    if (!condition) {
+        message = message || "Assertion failed";
+
+        throw message;
+    }
+}
