@@ -1,7 +1,6 @@
 // BREADTH FIRST SEARCH THEN FLOOD FILL
 
 var grid = [];
-var ranges = [];
 var path = [];
 var map = [[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
            [1,1,1,1,1,1,1,1,2,2,2,1,1,1,1,1,1,1,1,1],
@@ -38,6 +37,7 @@ Strategy.Game.prototype = {
                 tile.cost = map[i][j];
                 tile.row = i;
                 tile.col = j;
+                tile.depth = Infinity;
 
                 grid[i][j] = tile;
             }
@@ -64,14 +64,14 @@ Strategy.Game.prototype = {
         player2.tint = 0xFF00FF;
         player2.row = 6;
         player2.col = 9;
-        player2.moves = 3;
+        player2.moves = 4;
         player2.range = 2;
         grid[player2.row][player2.col].containsPlayer = true;
 
         player2.inputEnabled = true;
         player2.events.onInputDown.add(this.drawRange, this, player2);
 
-        this.test();
+        //this.test();
     },
 
     neighbors: function (tile) {
@@ -92,30 +92,54 @@ Strategy.Game.prototype = {
 
     drawRange: function (player) {
         this.clearDraw();
-        this.findRange(player);
 
         var playerTile = grid[player.row][player.col];
 
-        var len = ranges["move"].length;
+        range = this.getRange(player);
+        //this.attackRange(playerTile, 0, player.moves, player.range);
+
+        var len = range.length;
         for (var i = 0; i < len; i++) {
-            ranges["move"][i].tint = 0x0000FF;
+            if (range[i].depth <= player.moves) {
+                range[i].tint = 0x0000FF;
 
-            ranges["move"][i].inputEnabled = true;
-            ranges["move"][i].events.onInputOver.add(function(tile, pointer) {
-                this.drawPath(tile, playerTile);
-            }, this);
-
-            if (!ranges["move"][i].containsPlayer) {
-                ranges["move"][i].events.onInputDown.add(function(tile, pointer) {
-                    this.followPath(player);
+                range[i].inputEnabled = true;
+                range[i].events.onInputOver.add(function(tile, pointer) {
+                    console.log(tile.depth);
+                    this.drawPath(tile, playerTile);
                 }, this);
+
+                if (!range[i].containsPlayer) {
+                    range[i].events.onInputDown.add(function(tile, pointer) {
+                        this.followPath(player);
+                    }, this);
+                }
+            }
+            else {
+                range[i].tint = 0xFF0000;
             }
         };
 
-        var len = ranges["attack"].length;
-        for (var i = 0; i < len; i++) {
-            ranges["attack"][i].tint = 0xFF0000;
-        };
+        // var len = ranges["move"].length;
+        // for (var i = 0; i < len; i++) {
+        //     ranges["move"][i].tint = 0x0000FF;
+
+        //     ranges["move"][i].inputEnabled = true;
+        //     ranges["move"][i].events.onInputOver.add(function(tile, pointer) {
+        //         this.drawPath(tile, playerTile);
+        //     }, this);
+
+        //     if (!ranges["move"][i].containsPlayer) {
+        //         ranges["move"][i].events.onInputDown.add(function(tile, pointer) {
+        //             this.followPath(player);
+        //         }, this);
+        //     }
+        // };
+
+        // var len = ranges["attack"].length;
+        // for (var i = 0; i < len; i++) {
+        //     ranges["attack"][i].tint = 0xFF0000;
+        // };
     },
 
     drawPath: function (to, from) {
@@ -157,6 +181,7 @@ Strategy.Game.prototype = {
 
             currentCost = next.cost;
         }
+
         grid[player.row][player.col].containsPlayer = false;
         player.row = next.row;
         player.col = next.col;
@@ -164,11 +189,11 @@ Strategy.Game.prototype = {
         playerTween.start();
     },
 
-    findRange: function (player) {
+    getRange: function (player) {
         path = [];
         var visited = [];
         var frontier = [];
-        var attack = [];
+        rangeList = [];
 
         var tile = grid[player.row][player.col];
         tile.depth = 0;
@@ -179,107 +204,105 @@ Strategy.Game.prototype = {
         var moves = player.moves;
         var range = player.range;
 
-        ranges["move"] = [];
-        ranges["attack"] = [];
-
         while (frontier.length != 0) {
             // get the first tile in the queue
             var current = frontier.shift();
+            if (visited.indexOf(current) == -1) {
+                visited.push(current);
+            }
 
             // if we're with the movement range, show a blue tile
-            if (current.depth <= moves) {
-                ranges["move"].push(current);
-            }
-            // if we're outside of the movement range but within the attack range tile,
-            // show a red tile
-            else if (current.depth <= moves + range) {
-                ranges["attack"].push(current);
-            }
+            rangeList.push(current);
 
             // get all of the neighbors of the current tile
             var neighbors = this.neighbors(current);
             var len = neighbors.length;
 
             for (var i = 0; i < len; i++) {
-                // if we've already been to this tile, ignore it
-                if (visited.indexOf(neighbors[i]) == -1) {
 
-                    if (!neighbors[i].isObstacle) {
-                        // within the movement range, we take
+                var nextDepth = current.depth + Math.max(neighbors[i].cost, current.cost);
+                
+                // if we've already been to this tile, ignore it
+                if (!neighbors[i].isObstacle && nextDepth <= moves) {
+                    if (nextDepth < neighbors[i].depth) {
                         // the cost (terrain type) of moving INTO a
                         // tile when we consider the "depth" of that
                         // tile from the starting point
-                        if (current.depth < moves) {
-                            neighbors[i].depth = current.depth + Math.max(neighbors[i].cost, current.cost);
-                        } 
-                        // outside of the movement range but within the attack range,
-                        // all terrain costs the same
-                        else {
-                            neighbors[i].depth = current.depth + 1;
-                        }
-
-                        // add the neighbor to the queue and to the array of visited tiles
-                        // as long as it is within the depth-limit of moves + range 
-                        // (the max attack range after maximum movement)
-                        if (neighbors[i].depth <= moves + range)
-                        {
-                            neighbors[i].cameFrom = current;
-                            frontier.push(neighbors[i]);
-                            visited.push(neighbors[i]);
-                        }
-                    } 
-                    // if we encounter an obstacle in the movement range and our
-                    // character has a ranged attack, keep track of the obstacle
-                    // so that later we can see if there are any oppurtunities
-                    // to attack over the wall
-                    else if (range > 1) {
-                        neighbors[i].depth = current.depth + 1;
-                        attack.push(neighbors[i]);
-                        visited.push(neighbors[i]);
+                        neighbors[i].depth = nextDepth;
+                        neighbors[i].cameFrom = current;
+                        frontier.push(neighbors[i]);
+                    }
+                } else {
+                    depth = Math.max(current.depth + 1, moves + 1);
+                    if (depth < neighbors[i].depth && depth <= moves + range) {
+                        neighbors[i].depth = depth;
+                        neighbors[i].cameFrom = current;
+                        frontier.push(neighbors[i]);
                     }
                 }
+                    // add the neighbor to the queue and to the array of visited tiles
+                    // as long as it is within the depth-limit of moves + range 
+                    // (the max attack range after maximum movement)
+                // else if (range > 1) {
+                //     var depth = Math.max(current.depth + 1, moves + 1);
+                //     if (depth < neighbors[i].depth && depth <= moves + range) {
+                //         neighbors[i].depth = depth;
+                //         neighbors[i].cameFrom = current;
+                //         frontier.push(neighbors[i]);
+                //     }
+                // }
+                // else {
+                //     continue;
+                // }
+
+                // if (depth < neighbors[i].depth && depth <= moves + range) {
+                //     // the cost (terrain type) of moving INTO a
+                //     // tile when we consider the "depth" of that
+                //     // tile from the starting point
+                //     neighbors[i].depth = depth;
+                //     neighbors[i].cameFrom = current;
+                //     frontier.push(neighbors[i]);
+                // }
             }
         }
 
         this.visited = visited;
-
-        // if we encountered obstacles as a ranged character in the movement range,
-        // we need to check if there are any squares in the attack range
-        // that are reachable by attacking over an obstacle
-        // we will attempt to flood fill any non-obstacle spaces within the attack
-        // range - 1 from the encountered obstacle (minus 1 because the obstacle itself
-        // already represents 1 range away from where the character can stand)
-        var len = attack.length;
-        for (var i = 0; i < len; i++) {
-            this.attackFill(attack[i], (moves + range) - attack[i].depth)
-        }
-
-        this.visited = visited;
+        return rangeList;
     },
 
-    attackFill: function (tile, range) {
-        if (range < 0) {
-            return;
-        }
 
-        if (this.visited.indexOf(tile) == -1 && !tile.isObstacle) {
-            ranges["attack"].push(tile);
-            this.visited.push(tile);
-        }
 
-        var neighbors = this.neighbors(tile);
-        var len = neighbors.length;
+    // attackRange: function (tile, depth, moves, range) {
 
-        for (var i = 0; i < len; i++) {
-            this.attackFill(neighbors[i], range - 1);
-        }
+    //     if (this.visited.indexOf(tile) == -1) {
+    //         ranges["attack"].push(tile);
+    //         this.visited.push(tile);
+    //     }
 
-    },
+    //     var neighbors = this.neighbors(tile);
+    //     var len = neighbors.length;
+    //     var newDepth;
+
+    //     for (var i = 0; i < len; i++) {
+    //             if (!neighbors[i].isObstacle) {
+    //                 if (depth < moves) {
+    //                     newDepth = depth + Math.max(tile.cost, neighbors[i].cost);
+    //                 }
+    //                 else {
+    //                     newDepth = depth + 1;
+    //                 }
+
+    //                 if (newDepth <= moves + range) {
+    //                     this.attackRange(neighbors[i], newDepth, moves, range);
+    //                 }
+    //             }
+    //     }
+    // },
 
     clearDraw: function () {
         var len = this.visited.length;
-
         for (var i = 0; i < len; i++) {
+            this.visited[i].depth = Infinity; 
             this.visited[i].tint = 0xFFFFFF;
             this.visited[i].events.onInputOver.removeAll();
             this.visited[i].events.onInputDown.removeAll();
@@ -292,10 +315,10 @@ Strategy.Game.prototype = {
         player.col = 9;
         player.range = 1;
         player.moves = 1;
-        this.findRange(player);
+        this.getRange(player);
         assert(ranges["move"].sort == [grid[6][9],grid[7][9],grid[5][9],grid[6][8],grid[6][10]].sort);
-        assert(ranges["attack"].sort ==
-         [grid[8][9],grid[7][10],grid[7][8],grid[6][7],grid[6][11],grid[5][8],grid[5][10]].sort);
+        // assert(ranges["attack"].sort ==
+        //  [grid[8][9],grid[7][10],grid[7][8],grid[6][7],grid[6][11],grid[5][8],grid[5][10]].sort);
     },
 
 };
