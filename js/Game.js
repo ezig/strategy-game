@@ -2,6 +2,7 @@
 
 var grid = [];
 var path = [];
+var drawn = [];
 var map = [[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
            [1,1,1,1,1,1,1,1,2,2,2,1,1,1,1,1,1,1,1,1],
            [1,1,1,1,1,1,1,1,0,0,0,1,1,1,1,1,1,1,1,1],
@@ -23,7 +24,6 @@ Strategy.Game = function(){};
 Strategy.Game.prototype = {
 
     create: function () {
-        this.visited = [];
 
         var cols = this.game.width / 16;
         var rows = this.game.height / 16;
@@ -91,12 +91,11 @@ Strategy.Game.prototype = {
     },
 
     drawRange: function (player) {
-        this.clearDraw();
+        this.clearDraw(drawn);
 
         var playerTile = grid[player.row][player.col];
 
         range = this.getRange(player);
-        //this.attackRange(playerTile, 0, player.moves, player.range);
 
         var len = range.length;
         for (var i = 0; i < len; i++) {
@@ -105,7 +104,6 @@ Strategy.Game.prototype = {
 
                 range[i].inputEnabled = true;
                 range[i].events.onInputOver.add(function(tile, pointer) {
-                    console.log(tile.depth);
                     this.drawPath(tile, playerTile);
                 }, this);
 
@@ -120,26 +118,7 @@ Strategy.Game.prototype = {
             }
         };
 
-        // var len = ranges["move"].length;
-        // for (var i = 0; i < len; i++) {
-        //     ranges["move"][i].tint = 0x0000FF;
-
-        //     ranges["move"][i].inputEnabled = true;
-        //     ranges["move"][i].events.onInputOver.add(function(tile, pointer) {
-        //         this.drawPath(tile, playerTile);
-        //     }, this);
-
-        //     if (!ranges["move"][i].containsPlayer) {
-        //         ranges["move"][i].events.onInputDown.add(function(tile, pointer) {
-        //             this.followPath(player);
-        //         }, this);
-        //     }
-        // };
-
-        // var len = ranges["attack"].length;
-        // for (var i = 0; i < len; i++) {
-        //     ranges["attack"][i].tint = 0xFF0000;
-        // };
+        drawn = range;
     },
 
     drawPath: function (to, from) {
@@ -170,7 +149,7 @@ Strategy.Game.prototype = {
         var playerTween = this.game.add.tween(player);
 
         this.clearPath();
-        this.clearDraw();
+        this.clearDraw(drawn);
 
         while (path.length > 0) {
             next = path.pop();
@@ -193,16 +172,12 @@ Strategy.Game.prototype = {
         path = [];
         var visited = [];
         var frontier = [];
-        rangeList = [];
 
         var tile = grid[player.row][player.col];
         tile.depth = 0;
 
         frontier.push(tile);
         visited.push(tile);
-
-        var moves = player.moves;
-        var range = player.range;
 
         while (frontier.length != 0) {
             // get the first tile in the queue
@@ -211,9 +186,6 @@ Strategy.Game.prototype = {
                 visited.push(current);
             }
 
-            // if we're with the movement range, show a blue tile
-            rangeList.push(current);
-
             // get all of the neighbors of the current tile
             var neighbors = this.neighbors(current);
             var len = neighbors.length;
@@ -221,91 +193,32 @@ Strategy.Game.prototype = {
             for (var i = 0; i < len; i++) {
 
                 var nextDepth = current.depth + Math.max(neighbors[i].cost, current.cost);
-                
-                // if we've already been to this tile, ignore it
-                if (!neighbors[i].isObstacle && nextDepth <= moves) {
-                    if (nextDepth < neighbors[i].depth) {
-                        // the cost (terrain type) of moving INTO a
-                        // tile when we consider the "depth" of that
-                        // tile from the starting point
-                        neighbors[i].depth = nextDepth;
-                        neighbors[i].cameFrom = current;
-                        frontier.push(neighbors[i]);
-                    }
-                } else {
-                    depth = Math.max(current.depth + 1, moves + 1);
-                    if (depth < neighbors[i].depth && depth <= moves + range) {
-                        neighbors[i].depth = depth;
-                        neighbors[i].cameFrom = current;
-                        frontier.push(neighbors[i]);
+
+                if (neighbors[i].isObstacle || nextDepth > player.moves) {
+                    nextDepth = Math.max(current.depth + 1, player.moves + 1);
+                    if (nextDepth > player.moves + player.range) {
+                        continue;
                     }
                 }
-                    // add the neighbor to the queue and to the array of visited tiles
-                    // as long as it is within the depth-limit of moves + range 
-                    // (the max attack range after maximum movement)
-                // else if (range > 1) {
-                //     var depth = Math.max(current.depth + 1, moves + 1);
-                //     if (depth < neighbors[i].depth && depth <= moves + range) {
-                //         neighbors[i].depth = depth;
-                //         neighbors[i].cameFrom = current;
-                //         frontier.push(neighbors[i]);
-                //     }
-                // }
-                // else {
-                //     continue;
-                // }
 
-                // if (depth < neighbors[i].depth && depth <= moves + range) {
-                //     // the cost (terrain type) of moving INTO a
-                //     // tile when we consider the "depth" of that
-                //     // tile from the starting point
-                //     neighbors[i].depth = depth;
-                //     neighbors[i].cameFrom = current;
-                //     frontier.push(neighbors[i]);
-                // }
+                if (nextDepth < neighbors[i].depth) {
+                    neighbors[i].depth = nextDepth;
+                    neighbors[i].cameFrom = current;
+                    frontier.push(neighbors[i]);
+                }
             }
         }
 
-        this.visited = visited;
-        return rangeList;
+        return visited;
     },
 
-
-
-    // attackRange: function (tile, depth, moves, range) {
-
-    //     if (this.visited.indexOf(tile) == -1) {
-    //         ranges["attack"].push(tile);
-    //         this.visited.push(tile);
-    //     }
-
-    //     var neighbors = this.neighbors(tile);
-    //     var len = neighbors.length;
-    //     var newDepth;
-
-    //     for (var i = 0; i < len; i++) {
-    //             if (!neighbors[i].isObstacle) {
-    //                 if (depth < moves) {
-    //                     newDepth = depth + Math.max(tile.cost, neighbors[i].cost);
-    //                 }
-    //                 else {
-    //                     newDepth = depth + 1;
-    //                 }
-
-    //                 if (newDepth <= moves + range) {
-    //                     this.attackRange(neighbors[i], newDepth, moves, range);
-    //                 }
-    //             }
-    //     }
-    // },
-
-    clearDraw: function () {
-        var len = this.visited.length;
+    clearDraw: function (tiles) {
+        var len = tiles.length;
         for (var i = 0; i < len; i++) {
-            this.visited[i].depth = Infinity; 
-            this.visited[i].tint = 0xFFFFFF;
-            this.visited[i].events.onInputOver.removeAll();
-            this.visited[i].events.onInputDown.removeAll();
+            tiles[i].depth = Infinity; 
+            tiles[i].tint = 0xFFFFFF;
+            tiles[i].events.onInputOver.removeAll();
+            tiles[i].events.onInputDown.removeAll();
         }
     },
 
