@@ -1,15 +1,17 @@
+// BREADTH FIRST SEARCH THEN FLOOD FILL
+
 var grid = [];
 var ranges = [];
 var path = [];
-var map = [[1,1,1,1,1,1,1,1,1,2,1,1,1,1,1,1,1,1,1,1],
-           [1,1,1,1,1,1,1,1,1,2,1,1,1,1,1,1,1,1,1,1],
+var map = [[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+           [1,1,1,1,1,1,1,1,2,2,2,1,1,1,1,1,1,1,1,1],
            [1,1,1,1,1,1,1,1,0,0,0,1,1,1,1,1,1,1,1,1],
-           [1,1,1,1,1,1,1,1,0,1,0,1,1,1,1,1,1,1,1,1],
-           [1,1,1,1,1,1,1,1,0,0,0,1,1,1,1,1,1,1,1,1],
+           [1,1,2,2,2,1,1,1,0,1,0,1,1,1,1,1,1,1,1,1],
+           [1,1,2,2,2,1,1,1,0,0,0,1,1,1,1,1,1,1,1,1],
            [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
-           [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
-           [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
-           [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+           [1,1,2,2,2,2,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+           [1,1,2,1,1,2,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+           [1,1,2,2,2,2,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
            [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
            [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
            [1,1,1,1,1,1,1,1,0,0,0,1,1,1,1,1,1,1,1,1],
@@ -48,8 +50,9 @@ Strategy.Game.prototype = {
         player.tint = 0x00FF00;
         player.row = 1;
         player.col = 12;
-        player.moves = 10;
+        player.moves = 5;
         player.range = 1;
+        grid[player.row][player.col].containsPlayer = true;
 
         player.inputEnabled = true;
         player.events.onInputDown.add(this.drawRange, this, player);
@@ -61,8 +64,9 @@ Strategy.Game.prototype = {
         player2.tint = 0xFF00FF;
         player2.row = 6;
         player2.col = 9;
-        player2.moves = 1;
-        player2.range = 1;
+        player2.moves = 3;
+        player2.range = 2;
+        grid[player2.row][player2.col].containsPlayer = true;
 
         player2.inputEnabled = true;
         player2.events.onInputDown.add(this.drawRange, this, player2);
@@ -95,13 +99,17 @@ Strategy.Game.prototype = {
         var len = ranges["move"].length;
         for (var i = 0; i < len; i++) {
             ranges["move"][i].tint = 0x0000FF;
+
             ranges["move"][i].inputEnabled = true;
             ranges["move"][i].events.onInputOver.add(function(tile, pointer) {
                 this.drawPath(tile, playerTile);
             }, this);
-            ranges["move"][i].events.onInputDown.add(function(tile, pointer) {
-                this.followPath(player);
-            }, this);
+
+            if (!ranges["move"][i].containsPlayer) {
+                ranges["move"][i].events.onInputDown.add(function(tile, pointer) {
+                    this.followPath(player);
+                }, this);
+            }
         };
 
         var len = ranges["attack"].length;
@@ -149,9 +157,10 @@ Strategy.Game.prototype = {
 
             currentCost = next.cost;
         }
+        grid[player.row][player.col].containsPlayer = false;
         player.row = next.row;
         player.col = next.col;
-
+        grid[player.row][player.col].containsPlayer = true;
         playerTween.start();
     },
 
