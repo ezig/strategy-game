@@ -1,5 +1,3 @@
-// BREADTH FIRST SEARCH THEN FLOOD FILL
-
 var grid = [];
 var path = [];
 var drawn = [];
