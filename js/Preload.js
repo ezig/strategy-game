@@ -9,6 +9,7 @@ Strategy.Preload.prototype = {
 
 		// load assets
 		this.load.spritesheet('tiles', 'assets/images/tiles.png', 16, 16, 3);
+		this.load.image('healthbar', 'assets/images/healthbar.png');
 	},
 	
 	create: function() {

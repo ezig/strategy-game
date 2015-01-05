@@ -16,6 +16,13 @@ var map = [[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
            [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
            [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
            [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],];
+var units = [{moves: 5, range: 1, color: 0x00FF00, row: 1, col: 12, team: 'player'},
+             {moves: 4, range: 2, color: 0xFF00FF, row: 6, col: 9, team: 'player'},
+             {moves: 2, range: 1, color: 0xFF0000, row: 2, col: 2, team: 'enemy'}]
+var playerUnits = [];
+var enemyUnits = [];
+
+//var turn = 'player';
 
 Strategy.Game = function(){};
 
@@ -41,35 +48,76 @@ Strategy.Game.prototype = {
             }
         }
 
-        var player = this.game.add.sprite(12 * 16, 1 * 16, 'tiles');
-        player.frame = 1;
-        player.anchor.setTo(-0.5,-0.5);
-        player.scale.setTo(0.5);
-        player.tint = 0x00FF00;
-        player.row = 1;
-        player.col = 12;
-        player.moves = 5;
-        player.range = 1;
-        grid[player.row][player.col].containsPlayer = true;
+        var len = units.length;
+        for (var i = 0; i < len; i++) {
+            var unit = this.createUnit(units[i]);
 
-        player.inputEnabled = true;
-        player.events.onInputDown.add(this.drawRange, this, player);
+            if (units[i].team == 'player') {
+                playerUnits.push(unit);
+            } else {
+                enemyUnits.push(unit);
+            }
+        }
 
-        var player2 = this.game.add.sprite(144, 96, 'tiles');
-        player2.frame = 1;
-        player2.anchor.setTo(-0.5,-0.5);
-        player2.scale.setTo(0.5);
-        player2.tint = 0xFF00FF;
-        player2.row = 6;
-        player2.col = 9;
-        player2.moves = 4;
-        player2.range = 2;
-        grid[player2.row][player2.col].containsPlayer = true;
+        this.playerTurn();
+    },
 
-        player2.inputEnabled = true;
-        player2.events.onInputDown.add(this.drawRange, this, player2);
+    playerTurn: function () {
+        turn = 'player';
+        var len = playerUnits.length;
+        for (var i = 0; i < len; i++) {
+            var unit = playerUnits[i]
+            unit.events.onInputDown.add(this.drawRange, this);
+        }
+    },
 
-        //this.test();
+    enemyTurn: function () {
+        turn = 'enemy';
+        var unit = enemyUnits[0];
+        var neighbors = this.neighbors(grid[unit.row][unit.col]);
+        var tile = neighbors[Math.floor(Math.random() * neighbors.length)];
+        path = [tile];
+        this.followPath(unit);
+    },
+
+    createUnit: function (unit) {
+        var unitSprite = this.game.add.sprite(16 * unit.col, 16 * unit.row, 'tiles');
+        unitSprite.frame = 1;
+        unitSprite.anchor.setTo(-0.5,-0.5);
+        unitSprite.scale.setTo(0.5);
+        unitSprite.tint = unit.color;
+        unitSprite.row = unit.row;
+        unitSprite.col = unit.col;
+        unitSprite.moves = unit.moves;
+        unitSprite.range = unit.range;
+        unitSprite.team = unit.team;
+
+        this.addHealthBar(unitSprite);
+
+        if (unitSprite.team == 'player') {
+            grid[unit.row][unit.col].containsPlayer = true;
+            unitSprite.inputEnabled = true;
+        } else {
+            grid[unit.row][unit.col].containsEnemy = true;
+        }    
+
+        return unitSprite;
+    },
+
+    addHealthBar: function (unit) {
+        var healthbarbg = this.game.add.sprite(0, -10, 'healthbar');
+        healthbarbg.anchor.setTo(-0.5,-0.5);
+        healthbarbg.cropEnabled = true;
+        healthbarbg.tint = 0xFF0000;
+
+        var healthbarfg = this.game.add.sprite(0, -10, 'healthbar');
+        healthbarfg.anchor.setTo(-0.5,-0.5);
+        healthbarfg.cropEnabled = true;
+        healthbarfg.width *= 0.75
+        healthbarfg.tint = 0x00FF00;
+
+        unit.addChild(healthbarbg);
+        unit.addChild(healthbarfg);
     },
 
     neighbors: function (tile) {
@@ -100,13 +148,15 @@ Strategy.Game.prototype = {
             if (range[i].depth <= player.moves) {
                 range[i].tint = 0x0000FF;
 
-                range[i].inputEnabled = true;
-                range[i].events.onInputOver.add(function(tile, pointer) {
-                    this.drawPath(tile, playerTile);
-                }, this);
-
                 if (!range[i].containsPlayer) {
+                    range[i].inputEnabled = true;
+
+                    range[i].events.onInputOver.add(function(tile, pointer) {
+                        this.drawPath(tile, playerTile);
+                    }, this);
                     range[i].events.onInputDown.add(function(tile, pointer) {
+                        this.clearPath();
+                        this.clearDraw(drawn);
                         this.followPath(player);
                     }, this);
                 }
@@ -146,8 +196,7 @@ Strategy.Game.prototype = {
         var currentCost = 0;
         var playerTween = this.game.add.tween(player);
 
-        this.clearPath();
-        this.clearDraw(drawn);
+        player.events.onInputDown.removeAll();
 
         while (path.length > 0) {
             next = path.pop();
@@ -159,11 +208,26 @@ Strategy.Game.prototype = {
             currentCost = next.cost;
         }
 
-        grid[player.row][player.col].containsPlayer = false;
+        playerTween.onComplete.add(function() {   
+            if (turn == 'player') {
+                this.enemyTurn();
+            } else {
+                this.playerTurn();
+            }
+            //player.events.onInputDown.add(this.drawRange, this, player);
+        }, this);
+        playerTween.start();
+
+        if (player.team == 'player') {
+            grid[player.row][player.col].containsPlayer = false;
+            grid[next.row][next.col].containsPlayer = true;
+        } else {
+            grid[player.row][player.col].containsEnemy = false;
+            grid[next.row][next.col].containsEnemy = true;
+        }
+
         player.row = next.row;
         player.col = next.col;
-        grid[player.row][player.col].containsPlayer = true;
-        playerTween.start();
     },
 
     getRange: function (player) {
@@ -192,7 +256,7 @@ Strategy.Game.prototype = {
 
                 var nextDepth = current.depth + Math.max(neighbors[i].cost, current.cost);
 
-                if (neighbors[i].isObstacle || nextDepth > player.moves) {
+                if (neighbors[i].isObstacle || neighbors[i].containsEnemy || nextDepth > player.moves) {
                     nextDepth = Math.max(current.depth + 1, player.moves + 1);
                     if (nextDepth > player.moves + player.range) {
                         continue;
