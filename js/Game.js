@@ -16,13 +16,73 @@ var map = [[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
            [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
            [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
            [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],];
-var units = [{moves: 5, range: 1, color: 0x00FF00, row: 1, col: 12, team: 'player'},
-             {moves: 4, range: 2, color: 0xFF00FF, row: 6, col: 9, team: 'player'},
-             {moves: 2, range: 1, color: 0xFF0000, row: 2, col: 2, team: 'enemy'}]
+
+var units = [{moves: 5, range: 1, color: 0x00FF00, row: 1, col: 12, maxHealth: 10, team: 'player'},
+             {moves: 4, range: 2, color: 0xFF00FF, row: 6, col: 9, maxHealth: 8, team: 'player'},
+             {moves: 2, range: 1, color: 0xFF0000, row: 2, col: 2, maxHealth: 10, team: 'enemy'}]
 var playerUnits = [];
 var enemyUnits = [];
 
-//var turn = 'player';
+var turn = 'player';
+
+Unit = function (unitData) {
+    Phaser.Sprite.call(this, Strategy.game, 16 * unitData.col, 16 * unitData.row, 'tiles');
+
+    this.frame = 1;
+    this.anchor.setTo(-0.5,-0.5);
+    this.scale.setTo(0.5);
+    this.tint = unitData.color;
+    this.row = unitData.row;
+    this.col = unitData.col;
+    this.moves = unitData.moves;
+    this.range = unitData.range;
+    this.team = unitData.team;
+    this.health = unitData.maxHealth;
+
+    if (this.team == 'player') {
+        grid[this.row][this.col].containsPlayer = true;
+        this.inputEnabled = true;
+    } else {
+        grid[this.row][this.col].containsEnemy = true;
+    }    
+
+    Strategy.game.add.existing(this);
+},
+
+Unit.prototype = Object.create(Phaser.Sprite.prototype);
+Unit.prototype.constructor = Unit;
+
+
+Unit.prototype.addHealthBar = function () {
+    var healthbarbg = this.game.add.sprite(0, -10, 'healthbar');
+    healthbarbg.anchor.setTo(-0.5,-0.5);
+    healthbarbg.cropEnabled = true;
+    healthbarbg.tint = 0xFF0000;
+
+    var healthbarfg = this.game.add.sprite(0, -10, 'healthbar');
+    healthbarfg.anchor.setTo(-0.5,-0.5);
+    healthbarfg.cropEnabled = true;
+    healthbarfg.tint = 0x00FF00;
+
+    this.addChild(healthbarbg);
+    this.addChild(healthbarfg);
+}
+
+Tile = function (row, col, type) {
+    Phaser.Sprite.call(this, Strategy.game, 16 * col, 16 * row, 'tiles');
+
+    this.frame = type
+    this.isObstacle = !type;
+    this.cost = type;
+    this.row = row;
+    this.col = col;
+    this.depth = Infinity;
+
+    Strategy.game.add.existing(this);
+}
+
+Tile.prototype = Object.create(Phaser.Sprite.prototype);
+Tile.prototype.constructor = Tile;
 
 Strategy.Game = function(){};
 
@@ -30,29 +90,23 @@ Strategy.Game.prototype = {
 
     create: function () {
 
+        // TODO: factor this out to global
         var cols = this.game.width / 16;
         var rows = this.game.height / 16;
 
         for (var i = 0; i < rows; i++) {
             grid[i] = [];
             for (var j = 0; j < cols; j++) {
-                var tile = this.game.add.sprite(j * 16, i * 16, 'tiles');
-                tile.frame = map[i][j];
-                tile.isObstacle = !map[i][j];
-                tile.cost = map[i][j];
-                tile.row = i;
-                tile.col = j;
-                tile.depth = Infinity;
-
-                grid[i][j] = tile;
+                grid[i][j] = new Tile (i, j, map[i][j]);
             }
         }
 
         var len = units.length;
         for (var i = 0; i < len; i++) {
-            var unit = this.createUnit(units[i]);
+            var unit = new Unit(units[i]);
+            unit.addHealthBar();
 
-            if (units[i].team == 'player') {
+            if (unit.team == 'player') {
                 playerUnits.push(unit);
             } else {
                 enemyUnits.push(unit);
@@ -80,44 +134,8 @@ Strategy.Game.prototype = {
         this.followPath(unit);
     },
 
-    createUnit: function (unit) {
-        var unitSprite = this.game.add.sprite(16 * unit.col, 16 * unit.row, 'tiles');
-        unitSprite.frame = 1;
-        unitSprite.anchor.setTo(-0.5,-0.5);
-        unitSprite.scale.setTo(0.5);
-        unitSprite.tint = unit.color;
-        unitSprite.row = unit.row;
-        unitSprite.col = unit.col;
-        unitSprite.moves = unit.moves;
-        unitSprite.range = unit.range;
-        unitSprite.team = unit.team;
-
-        this.addHealthBar(unitSprite);
-
-        if (unitSprite.team == 'player') {
-            grid[unit.row][unit.col].containsPlayer = true;
-            unitSprite.inputEnabled = true;
-        } else {
-            grid[unit.row][unit.col].containsEnemy = true;
-        }    
-
-        return unitSprite;
-    },
-
     addHealthBar: function (unit) {
-        var healthbarbg = this.game.add.sprite(0, -10, 'healthbar');
-        healthbarbg.anchor.setTo(-0.5,-0.5);
-        healthbarbg.cropEnabled = true;
-        healthbarbg.tint = 0xFF0000;
 
-        var healthbarfg = this.game.add.sprite(0, -10, 'healthbar');
-        healthbarfg.anchor.setTo(-0.5,-0.5);
-        healthbarfg.cropEnabled = true;
-        healthbarfg.width *= 0.75
-        healthbarfg.tint = 0x00FF00;
-
-        unit.addChild(healthbarbg);
-        unit.addChild(healthbarfg);
     },
 
     neighbors: function (tile) {
@@ -214,7 +232,6 @@ Strategy.Game.prototype = {
             } else {
                 this.playerTurn();
             }
-            //player.events.onInputDown.add(this.drawRange, this, player);
         }, this);
         playerTween.start();
 
@@ -283,19 +300,6 @@ Strategy.Game.prototype = {
             tiles[i].events.onInputDown.removeAll();
         }
     },
-
-    test: function () {
-        var player = {};
-        player.row = 6;
-        player.col = 9;
-        player.range = 1;
-        player.moves = 1;
-        this.getRange(player);
-        assert(ranges["move"].sort == [grid[6][9],grid[7][9],grid[5][9],grid[6][8],grid[6][10]].sort);
-        // assert(ranges["attack"].sort ==
-        //  [grid[8][9],grid[7][10],grid[7][8],grid[6][7],grid[6][11],grid[5][8],grid[5][10]].sort);
-    },
-
 };
 
 function assert(condition, message) {
