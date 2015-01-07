@@ -1,6 +1,8 @@
-var grid = [];
+// These shouldn't be cglobal
 var path = [];
 var drawn = [];
+
+var grid = [];
 var map = [[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
            [1,1,1,1,1,1,1,1,2,2,2,1,1,1,1,1,1,1,1,1],
            [1,1,1,1,1,1,1,1,0,0,0,1,1,1,1,1,1,1,1,1],
@@ -22,8 +24,9 @@ var units = [{moves: 5, range: 1, color: 0x00FF00, row: 1, col: 12, maxHealth: 1
              {moves: 2, range: 1, color: 0xFF0000, row: 2, col: 2, maxHealth: 10, team: 'enemy'}]
 var playerUnits = [];
 var enemyUnits = [];
-
 var turn = 'player';
+
+Strategy.Game = function(){};
 
 Unit = function (unitData) {
     Phaser.Sprite.call(this, Strategy.game, 16 * unitData.col, 16 * unitData.row, 'tiles');
@@ -52,7 +55,6 @@ Unit = function (unitData) {
 Unit.prototype = Object.create(Phaser.Sprite.prototype);
 Unit.prototype.constructor = Unit;
 
-
 Unit.prototype.addHealthBar = function () {
     var healthbarbg = this.game.add.sprite(0, -10, 'healthbar');
     healthbarbg.anchor.setTo(-0.5,-0.5);
@@ -68,8 +70,54 @@ Unit.prototype.addHealthBar = function () {
     this.addChild(healthbarfg);
 }
 
+Unit.prototype.followPath = function (to, from) {
+        var currentCost = 0;
+        var playerTween = this.game.add.tween(this);
+        var next;
+
+        var my_path = [];
+
+        // TODO: combine these steps?
+        while (to != from) {
+            my_path.push(to);
+            to = to.cameFrom;
+        }
+
+        while(my_path.length > 0) {
+            var next = my_path.pop();
+
+            playerTween.to({
+            x: next.col * 16, y: next.row * 16
+            }, 300 * Math.max(next.cost, currentCost), Phaser.Easing.Linear.None);
+
+            currentCost = next.cost;
+        }
+
+        // playerTween.onComplete.add(function() {   
+        //     if (turn == 'player') {
+        //         Strategy.Game.prototype.enemyTurn();
+        //     } else {
+        //         Strategy.Game.prototype.playerTurn.apply(Strategy.Game.prototype);
+        //     }
+        // }, this);
+        // playerTween.reverse = true;
+        playerTween.start();
+
+        if (this.team == 'player') {
+            grid[this.row][this.col].containsPlayer = false;
+            grid[next.row][next.col].containsPlayer = true;
+        } else {
+            grid[this.row][this.col].containsEnemy = false;
+            grid[next.row][next.col].containsEnemy = true;
+        }
+
+        this.row = next.row;
+        this.col = next.col;
+}
+
+
 Tile = function (row, col, type) {
-    Phaser.Sprite.call(this, Strategy.game, 16 * col, 16 * row, 'tiles');
+    Phaser.Sprite.call(this, Strategy.game, Strategy.game.global.tileSize * col, Strategy.game.global.tileSize * row, 'tiles');
 
     this.frame = type
     this.isObstacle = !type;
@@ -84,15 +132,11 @@ Tile = function (row, col, type) {
 Tile.prototype = Object.create(Phaser.Sprite.prototype);
 Tile.prototype.constructor = Tile;
 
-Strategy.Game = function(){};
-
 Strategy.Game.prototype = {
 
     create: function () {
-
-        // TODO: factor this out to global
-        var cols = this.game.width / 16;
-        var rows = this.game.height / 16;
+        var cols = this.game.width / this.game.global.tileSize;
+        var rows = this.game.height / this.game.global.tileSize;
 
         for (var i = 0; i < rows; i++) {
             grid[i] = [];
@@ -112,7 +156,6 @@ Strategy.Game.prototype = {
                 enemyUnits.push(unit);
             }
         }
-
         this.playerTurn();
     },
 
@@ -130,12 +173,10 @@ Strategy.Game.prototype = {
         var unit = enemyUnits[0];
         var neighbors = this.neighbors(grid[unit.row][unit.col]);
         var tile = neighbors[Math.floor(Math.random() * neighbors.length)];
-        path = [tile];
-        this.followPath(unit);
-    },
-
-    addHealthBar: function (unit) {
-
+        tile.cameFrom = grid[unit.row][unit.col];
+        //var path = [tile];
+        unit.followPath(tile, grid[unit.row][unit.col]);
+        this.playerTurn();
     },
 
     neighbors: function (tile) {
@@ -164,7 +205,16 @@ Strategy.Game.prototype = {
         var len = range.length;
         for (var i = 0; i < len; i++) {
             if (range[i].depth <= player.moves) {
-                range[i].tint = 0x0000FF;
+                var tile = this.game.add.sprite(range[i].col * this.game.global.tileSize,
+                                                range[i].row * this.game.global.tileSize,
+                                                'tiles');
+                tile.frame = 1;
+                tile.tint = 0x0000FF;
+                tile.alpha = 0.7;
+                tile.row = range[i].row;
+                tile.col = range[i].col;
+                drawn.push(tile);
+                // range[i].tint = 0x0000FF;
 
                 if (!range[i].containsPlayer) {
                     range[i].inputEnabled = true;
@@ -173,18 +223,29 @@ Strategy.Game.prototype = {
                         this.drawPath(tile, playerTile);
                     }, this);
                     range[i].events.onInputDown.add(function(tile, pointer) {
+                        len = playerUnits.length;
+                        for (var i = 0; i < len; i++) {
+                            playerUnits[i].events.onInputDown.removeAll();
+                        };
                         this.clearPath();
                         this.clearDraw(drawn);
-                        this.followPath(player);
+                        player.followPath(tile, playerTile);
+                        this.enemyTurn();
                     }, this);
                 }
             }
             else {
-                range[i].tint = 0xFF0000;
+                var tile = this.game.add.sprite(range[i].col * this.game.global.tileSize,
+                                                range[i].row * this.game.global.tileSize,
+                                                'tiles');
+                tile.frame = 1;
+                tile.tint = 0xFF0000;
+                tile.alpha = 0.7;
+                tile.row = range[i].row;
+                tile.col = range[i].col;
+                drawn.push(tile);
             }
-        };
-
-        drawn = range;
+        }
     },
 
     drawPath: function (to, from) {
@@ -192,59 +253,34 @@ Strategy.Game.prototype = {
         path = [];
 
         while(to != from) {
-            path.push(to);
-            to.tint = 0x00FF00;
+            var tile = this.game.add.sprite(to.col * this.game.global.tileSize,
+                                            to.row * this.game.global.tileSize,
+                                            'tiles');
+            tile.frame = 1;
+            tile.tint = 0x00FF00;
+            tile.alpha = 0.5;
+            path.push(tile);
+
             to = to.cameFrom;
         }
 
-        from.tint = 0x00FF00;
+        var tile = this.game.add.sprite(from.col * this.game.global.tileSize,
+                                        from.row * this.game.global.tileSize,
+                                        'tiles');
+        tile.frame = 1;
+        tile.tint = 0x00FF00;
+        tile.alpha = 0.5;
+        path.push(tile);
     },
 
     clearPath: function () {
         var len = path.length;
 
         for (var i = 0; i < len; i++) {
-            path[i].tint = 0x0000FF;
-        }
-    },
-
-    // problem with clicking on player space
-    followPath: function (player) {
-        var next;
-        var currentCost = 0;
-        var playerTween = this.game.add.tween(player);
-
-        player.events.onInputDown.removeAll();
-
-        while (path.length > 0) {
-            next = path.pop();
-
-            playerTween.to({
-            x: next.col * 16, y: next.row * 16
-            }, 300 * Math.max(next.cost, currentCost), Phaser.Easing.Linear.None);
-
-            currentCost = next.cost;
+            path[i].destroy();
         }
 
-        playerTween.onComplete.add(function() {   
-            if (turn == 'player') {
-                this.enemyTurn();
-            } else {
-                this.playerTurn();
-            }
-        }, this);
-        playerTween.start();
-
-        if (player.team == 'player') {
-            grid[player.row][player.col].containsPlayer = false;
-            grid[next.row][next.col].containsPlayer = true;
-        } else {
-            grid[player.row][player.col].containsEnemy = false;
-            grid[next.row][next.col].containsEnemy = true;
-        }
-
-        player.row = next.row;
-        player.col = next.col;
+        path = [];
     },
 
     getRange: function (player) {
@@ -261,7 +297,7 @@ Strategy.Game.prototype = {
         while (frontier.length != 0) {
             // get the first tile in the queue
             var current = frontier.shift();
-            if (visited.indexOf(current) == -1) {
+            if (visited.indexOf(current) == -1 && !current.isObstacle) {
                 visited.push(current);
             }
 
@@ -291,21 +327,16 @@ Strategy.Game.prototype = {
         return visited;
     },
 
-    clearDraw: function (tiles) {
-        var len = tiles.length;
+    clearDraw: function () {
+        var len = drawn.length;
         for (var i = 0; i < len; i++) {
-            tiles[i].depth = Infinity; 
-            tiles[i].tint = 0xFFFFFF;
-            tiles[i].events.onInputOver.removeAll();
-            tiles[i].events.onInputDown.removeAll();
+            drawn[i].destroy();
+            grid[drawn[i].row][drawn[i].col].depth = Infinity; 
+            // tiles[i].tint = 0xFFFFFF;
+            grid[drawn[i].row][drawn[i].col].events.onInputOver.removeAll();
+            grid[drawn[i].row][drawn[i].col].events.onInputDown.removeAll();
         }
+
+        drawn = [];
     },
 };
-
-function assert(condition, message) {
-    if (!condition) {
-        message = message || "Assertion failed";
-
-        throw message;
-    }
-}

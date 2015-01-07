@@ -13,7 +13,6 @@ Strategy.Preload.prototype = {
 	},
 	
 	create: function() {
-		//	Once the load has finished we disable the crop as the music decodes
 		this.game.state.start('Game');
 
 	},
