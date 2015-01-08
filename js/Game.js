@@ -93,14 +93,13 @@ Unit.prototype.followPath = function (to, from) {
             currentCost = next.cost;
         }
 
-        // playerTween.onComplete.add(function() {   
-        //     if (turn == 'player') {
-        //         Strategy.Game.prototype.enemyTurn();
-        //     } else {
-        //         Strategy.Game.prototype.playerTurn.apply(Strategy.Game.prototype);
-        //     }
-        // }, this);
-        // playerTween.reverse = true;
+        playerTween.onComplete.add(function() {   
+            if (turn == 'player') {
+                Strategy.Game.prototype.enemyTurn.call(Strategy.game.state.states["Game"]);
+            } else {
+                Strategy.Game.prototype.playerTurn.call(Strategy.game.state.states["Game"]);
+            }
+        }, this);
         playerTween.start();
 
         if (this.team == 'player') {
@@ -176,7 +175,7 @@ Strategy.Game.prototype = {
         tile.cameFrom = grid[unit.row][unit.col];
         //var path = [tile];
         unit.followPath(tile, grid[unit.row][unit.col]);
-        this.playerTurn();
+        // this.playerTurn();
     },
 
     neighbors: function (tile) {
@@ -214,13 +213,16 @@ Strategy.Game.prototype = {
                 tile.row = range[i].row;
                 tile.col = range[i].col;
                 drawn.push(tile);
-                // range[i].tint = 0x0000FF;
 
+                this.game.world.bringToTop(player);
+
+                // TODO: this part of the code should be in a more logical place
                 if (!range[i].containsPlayer) {
                     range[i].inputEnabled = true;
 
                     range[i].events.onInputOver.add(function(tile, pointer) {
                         this.drawPath(tile, playerTile);
+                        this.game.world.bringToTop(player);
                     }, this);
                     range[i].events.onInputDown.add(function(tile, pointer) {
                         len = playerUnits.length;
@@ -230,7 +232,6 @@ Strategy.Game.prototype = {
                         this.clearPath();
                         this.clearDraw(drawn);
                         player.followPath(tile, playerTile);
-                        this.enemyTurn();
                     }, this);
                 }
             }
@@ -248,6 +249,7 @@ Strategy.Game.prototype = {
         }
     },
 
+    // change the layer ordering of the character and the tiles
     drawPath: function (to, from) {
         this.clearPath();
         path = [];
