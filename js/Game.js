@@ -60,6 +60,7 @@ Unit = function (unitData) {
     this.frame = 1;
     this.anchor.setTo(-0.5,-0.5);
     this.scale.setTo(0.5);
+    this.color = unitData.color;
     this.tint = unitData.color;
 
     // copy parameters to instance variables
@@ -259,10 +260,12 @@ Strategy.Game.prototype = {
     playerTurn: function () {
         turn = 'player';
 
+        this.recolor(enemyUnits);
+
         // make player units clickable to show range
         var len = playerUnits.length;
         for (var i = 0; i < len; i++) {
-            var unit = playerUnits[i]
+            var unit = playerUnits[i];
             unit.didMove = false;
             unit.inputEnabled = true;
         }
@@ -270,14 +273,23 @@ Strategy.Game.prototype = {
 
     // Called when turn switches from player to enemy
     enemyTurn: function () {
+        this.recolor(playerUnits);
+
         turn = 'enemy';
-        enemyUnits[0].didMove = false;
         // Sample enemy behavior that randomly moves the first enemy unit one space
         var unit = enemyUnits[0];
         var neighbors = this.neighbors(grid[unit.row][unit.col]);
         var tile = neighbors[Math.floor(Math.random() * neighbors.length)];
         tile.cameFrom = grid[unit.row][unit.col];
         unit.move(tile);
+    },
+
+    recolor: function (unitArray) {
+        var len = unitArray.length;
+
+        for (var i = 0; i < len; i++) {
+            unitArray[i].tint = unitArray[i].color;
+        }
     },
 
     neighbors: function (tile) {
@@ -299,7 +311,7 @@ Strategy.Game.prototype = {
     drawRange: function (player) {
         this.clearDraw();
         this.clearPath();
-        
+
         var playerTile = grid[player.row][player.col];
 
         range = this.getRange(player);
@@ -317,21 +329,21 @@ Strategy.Game.prototype = {
                 tile.col = range[i].col;
                 drawn.push(tile);
 
-                this.game.world.bringToTop(player);
 
                 // TODO: this part of the code should be in a more logical place
                 if (!range[i].containsPlayer) {
-                    range[i].inputEnabled = true;
+                    tile.inputEnabled = true;
 
-                    range[i].events.onInputOver.add(function(tile, pointer) {
-                        this.drawPath(tile, playerTile);
+                    tile.events.onInputOver.add(function(tile, pointer) {
+                        this.drawPath(grid[tile.row][tile.col], playerTile);
                         this.game.world.bringToTop(player);
                     }, this);
-                    range[i].events.onInputDown.add(function(tile, pointer) {
+
+                    tile.events.onInputDown.add(function(tile, pointer) {
                         player.inputEnabled = false;
                         this.clearPath();
-                        this.clearDraw(drawn);
-                        player.move(tile);
+                        this.clearDraw();
+                        player.move(grid[tile.row][tile.col]);
                     }, this);
                 }
             }
@@ -347,6 +359,8 @@ Strategy.Game.prototype = {
                 drawn.push(tile);
             }
         }
+
+        this.moveUnitsToTop();
     },
 
     drawPath: function (to, from) {
@@ -435,18 +449,26 @@ Strategy.Game.prototype = {
         for (var i = 0; i < len; i++) {
             drawn[i].destroy();
             // TODO: Move this logic
-            grid[drawn[i].row][drawn[i].col].depth = Infinity; 
-            grid[drawn[i].row][drawn[i].col].events.onInputOver.removeAll();
-            grid[drawn[i].row][drawn[i].col].events.onInputDown.removeAll();
         }
 
         drawn = [];
+        this.resetGrid();
+    },
+
+    resetGrid: function () {
+        for (var i = 0; i < grid.length; i++) {
+            for (var j = 0; j < grid[0].length; j++) {
+                grid[i][j].depth = Infinity; 
+            }
+        }
     },
 
     unitDidMove: function (unit) {
         var unitArray;
 
         unit.didMove = true;
+
+        unit.tint = 0xAAAAAA;
 
         if (unit.team == 'player') {
             unitArray = playerUnits;
@@ -466,6 +488,15 @@ Strategy.Game.prototype = {
             this.enemyTurn();
         } else {
             this.playerTurn();
+        }
+    },
+
+    moveUnitsToTop: function () {
+        var allUnits = playerUnits.concat(enemyUnits);
+
+        var len = allUnits.length;
+        for (var i = 0; i < len; i++) {
+            this.game.world.bringToTop(allUnits[i]);
         }
     }
 };
