@@ -455,6 +455,7 @@ Strategy.Game.prototype = {
         this.resetGrid();
     },
 
+    // TODO: Check where this actually needs to be called
     resetGrid: function () {
         for (var i = 0; i < grid.length; i++) {
             for (var j = 0; j < grid[0].length; j++) {
