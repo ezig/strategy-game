@@ -399,7 +399,7 @@ Strategy.Game.prototype = {
     },
 
     getRange: function (player) {
-        path = [];
+        this.resetGrid();
         var visited = [];
         var frontier = [];
 
@@ -452,7 +452,6 @@ Strategy.Game.prototype = {
         }
 
         drawn = [];
-        this.resetGrid();
     },
 
     // TODO: Check where this actually needs to be called
